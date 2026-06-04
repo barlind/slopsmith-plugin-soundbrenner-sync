@@ -1,0 +1,22 @@
+{
+  "id": "soundbrenner_sync",
+  "name": "Soundbrenner Sync",
+  "version": "0.1.28",
+  "private": false,
+  "standards": ["plugin-runtime-idempotent.v1"],
+  "nav": { "label": "Soundbrenner", "screen": "soundbrenner-sync" },
+  "screen": "screen.html",
+  "script": "screen.js",
+  "settings": { "html": "settings.html" },
+  "routes": "routes.py",
+  "runtime_domains": {
+    "playback": {
+      "roles": ["requester"],
+      "events": ["song:loading", "song:ready", "song:play", "song:resume", "song:pause", "song:stop", "song:ended", "song:seek", "beats:loaded", "arrangement:changed"]
+    },
+    "tempo-clock": {
+      "roles": ["provider"],
+      "events": ["midi-clock", "transport.start", "transport.stop"]
+    }
+  }
+}
