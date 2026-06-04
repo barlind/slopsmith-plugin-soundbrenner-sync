@@ -29,6 +29,11 @@
         window.removeEventListener('resize', runtime.quickSettingsDocumentHandlers.resize);
         runtime.quickSettingsDocumentHandlers = null;
     }
+    if (runtime.capabilityReadyListener) {
+        window.removeEventListener('slopsmith:capabilities:ready', runtime.capabilityReadyListener);
+        runtime.capabilityReadyListener = null;
+    }
+    runtime.playbackCapabilityInstalled = false;
 
     const API = '/api/plugins/soundbrenner_sync';
     const BEAT_BOUNDARY_WINDOW_SEC = 0.035;
@@ -201,6 +206,10 @@
 
     function isSongPlaying() {
         return window.slopsmith?.isPlaying === true;
+    }
+
+    function playbackApi() {
+        return window.slopsmith?.playback?.version === 1 ? window.slopsmith.playback : null;
     }
 
     function audioPlaybackReady() {
@@ -1965,25 +1974,73 @@
                 updatePlayerButton();
             }
         };
-        const handlers = {
+        const handlers = {};
+        const on = (eventName, handler) => {
+            handlers[eventName] = handler;
+            window.slopsmith.on(eventName, handler);
+        };
+        const off = (eventName) => {
+            const handler = handlers[eventName];
+            if (!handler || typeof window.slopsmith.off !== 'function') return;
+            window.slopsmith.off(eventName, handler);
+            delete handlers[eventName];
+        };
+        const registerPlaybackObserver = (playback) => {
+            if (!playback || typeof playback.registerObserver !== 'function') return;
+            playback.registerObserver({
+                observerId: 'soundbrenner_sync.playback-lifecycle',
+                kind: 'plugin',
+                observes: ['loading', 'ready', 'started', 'resumed', 'paused', 'stopped', 'ended', 'seeked'],
+                status: 'available',
+            });
+        };
+        const playbackHandlers = {
+            'playback:loading': () => stopForTransport(false),
+            'playback:ready': () => {
+                injectPlayerButton();
+                maybeRealignSync();
+            },
+            'playback:started': maybeStartSync,
+            'playback:resumed': maybeStartSync,
+            'playback:paused': () => stopForTransport(true),
+            'playback:stopped': () => stopForTransport(true),
+            'playback:ended': () => stopForTransport(true),
+            'playback:seeked': restartAfterSeek,
+        };
+        const legacyPlaybackHandlers = {
             'song:loading': () => stopForTransport(false),
             'song:ready': () => {
                 injectPlayerButton();
                 maybeRealignSync();
             },
-            'beats:loaded': maybeRealignSync,
             'song:play': maybeStartSync,
             'song:resume': maybeStartSync,
             'song:pause': () => stopForTransport(true),
             'song:stop': () => stopForTransport(true),
             'song:ended': () => stopForTransport(true),
             'song:seek': restartAfterSeek,
-            'arrangement:changed': restartAfterSeek,
+        };
+        const installPlaybackCapability = () => {
+            const playback = playbackApi();
+            if (!playback || runtime.playbackCapabilityInstalled) return false;
+            runtime.playbackCapabilityInstalled = true;
+            registerPlaybackObserver(playback);
+            Object.keys(legacyPlaybackHandlers).forEach(off);
+            Object.entries(playbackHandlers).forEach(([eventName, handler]) => {
+                if (!handlers[eventName]) on(eventName, handler);
+            });
+            return true;
         };
         runtime.eventHandlers = handlers;
-        Object.entries(handlers).forEach(([eventName, handler]) => {
-            window.slopsmith.on(eventName, handler);
-        });
+        on('beats:loaded', maybeRealignSync);
+        on('arrangement:changed', restartAfterSeek);
+        on('song:arrangement-changed', restartAfterSeek);
+        if (!installPlaybackCapability()) {
+            Object.entries(legacyPlaybackHandlers).forEach(([eventName, handler]) => on(eventName, handler));
+            const capabilityReadyListener = () => installPlaybackCapability();
+            runtime.capabilityReadyListener = capabilityReadyListener;
+            window.addEventListener('slopsmith:capabilities:ready', capabilityReadyListener, { once: true });
+        }
     }
 
     function attachAudioEvents() {
