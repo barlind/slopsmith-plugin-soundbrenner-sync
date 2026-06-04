@@ -1654,7 +1654,8 @@
         };
         btn.addEventListener('mouseenter', scheduleQuickSettingsShow);
         btn.addEventListener('mouseleave', scheduleQuickSettingsHide);
-        controls.insertBefore(btn, closeBtn);
+        if (closeBtn && closeBtn.parentElement === controls) controls.insertBefore(btn, closeBtn);
+        else controls.appendChild(btn);
 
         const popover = document.createElement('div');
         popover.id = 'soundbrenner-sync-popover';

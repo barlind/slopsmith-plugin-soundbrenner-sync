@@ -42,3 +42,11 @@ def test_manifest_keeps_tempo_clock_as_reserved_future_domain():
     assert tempo_clock["ownership"] == "multi-provider"
     assert tempo_clock["safety"] == "safe"
     assert set(tempo_clock["events"]) == {"midi-clock", "transport.start", "transport.stop"}
+
+
+def test_screen_inserts_player_button_only_before_child_close_button():
+    src = (ROOT / "screen.js").read_text(encoding="utf-8")
+
+    assert "closeBtn && closeBtn.parentElement === controls" in src
+    assert "controls.insertBefore(btn, closeBtn)" in src
+    assert "controls.appendChild(btn)" in src
